@@ -1,0 +1,5 @@
+#!/bin/bash
+chmod 400 /var/lib/rabbitmq/.erlang.cookie
+chown rabbitmq /var/lib/rabbitmq/.erlang.cookie
+chgrp rabbitmq /var/lib/rabbitmq/.erlang.cookie
+rabbitmq-server

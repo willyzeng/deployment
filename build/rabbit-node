@@ -1,0 +1,43 @@
+#!/bin/bash
+chmod 400 /var/lib/rabbitmq/.erlang.cookie
+chown rabbitmq /var/lib/rabbitmq/.erlang.cookie
+chgrp rabbitmq /var/lib/rabbitmq/.erlang.cookie
+echo "Running as clustered server"
+RABBITMQ_MNESIA_BASE="$RABBITMQ_MNESIA_BASE/$HOSTNAME"
+
+if [ ! -d "$RABBITMQ_MNESIA_BASE" ]; then
+  mkdir -p "$RABBITMQ_MNESIA_BASE"
+fi
+
+nodedown=$(rabbitmqctl status | grep nodedown)
+if [[ -z "$nodedown" ]]; then
+    rabbitmqctl stop
+fi
+
+rabbitmq-server -detached
+rabbitmqctl stop_app
+
+if [ "$NODE_TYPE"x = "ram"x ]; then
+    echo "Joining clruster $CLUSTER_WITH as ram node"
+    rabbitmqctl join_cluster rabbit@$CLUSTER_WITH --ram
+else 
+    echo "Joining cluster $CLUSTER_WITH as disc node"
+    rabbitmqctl join_cluster rabbit@$CLUSTER_WITH
+fi
+
+rabbitmqctl start_app
+
+#now only to see  if policy been applied to 1 virtual host, later need to check if applied to all virtual hosts.
+varpolicy=$(rabbitmqctl list_policies | grep queue-configuration)
+if [[ $SET_POLICY && -z "$varpolicy" ]]; then
+    #applies 2 days message TTL in queue ----- "message-ttl":172800000
+    #applies a queue TTL of 30 days ----- "expires":2592000000
+    #applies max message length in bytes 50Mb in queue ----- "max-length-bytes":50000000
+    #applies max message number 25K per queue ----- "max-length":25000
+    #applies queues mirrored to any three nodes in the cluster, with automatic synchronisation
+    #all the policies are set to the default '/' virtual host. need to find a way to automatic apply policies to all vhosts.
+    echo "set policy"
+    rabbitmqctl set_policy queue-configuration ".*" '{"max-length-bytes":100000000, "max-length":1000000, "message-ttl":172800000, "ha-mode":"exactly","ha-params":3,"ha-sync-mode":"automatic"}' --apply-to queues
+fi
+# Tail to keep the a foreground process active..
+tail -f /var/log/rabbitmq/rabbitmq.log

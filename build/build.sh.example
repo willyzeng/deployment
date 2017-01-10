@@ -1,0 +1,5 @@
+#!/bin/bash
+
+#Please execute it with root.
+
+docker build -t st-rabbitmq:3.6.5 .
